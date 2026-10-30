@@ -1,0 +1,253 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
+  <hashTree>
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="OJ: login -&gt; submit once -&gt; poll -&gt; Accepted" enabled="true">
+      <boolProp name="TestPlan.functional_mode">false</boolProp>
+      <boolProp name="TestPlan.serialize_threadgroups">false</boolProp>
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" testname="Variables">
+        <collectionProp name="Arguments.arguments" />
+      </elementProp>
+    </TestPlan>
+    <hashTree>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="One account and one submission per user" enabled="true">
+        <stringProp name="ThreadGroup.num_threads">${__P(users,1)}</stringProp>
+        <stringProp name="ThreadGroup.ramp_time">${__P(ramp,1)}</stringProp>
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <boolProp name="ThreadGroup.scheduler">false</boolProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Run once" enabled="true">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">1</stringProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <CSVDataSet guiclass="TestBeanGUI" testclass="CSVDataSet" testname="Dedicated accounts (never recycle)" enabled="true">
+          <stringProp name="filename">${__P(accounts_file,tests/load/.local/accounts.csv)}</stringProp>
+          <stringProp name="fileEncoding">UTF-8</stringProp>
+          <stringProp name="variableNames" />
+          <boolProp name="ignoreFirstLine">false</boolProp>
+          <stringProp name="delimiter">,</stringProp>
+          <boolProp name="quotedData">true</boolProp>
+          <boolProp name="recycle">false</boolProp>
+          <boolProp name="stopThread">true</boolProp>
+          <stringProp name="shareMode">shareMode.all</stringProp>
+        </CSVDataSet>
+        <hashTree />
+        <CookieManager guiclass="CookiePanel" testclass="CookieManager" testname="Independent login session per thread" enabled="true">
+          <boolProp name="CookieManager.clearEachIteration">false</boolProp>
+          <boolProp name="CookieManager.controlledByThreadGroup">false</boolProp>
+          <collectionProp name="CookieManager.cookies" />
+        </CookieManager>
+        <hashTree />
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="JSON requests" enabled="true">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header">
+              <stringProp name="Header.name">Content-Type</stringProp>
+              <stringProp name="Header.value">application/json; charset=utf-8</stringProp>
+            </elementProp>
+          </collectionProp>
+        </HeaderManager>
+        <hashTree />
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Login" enabled="true">
+          <stringProp name="HTTPSampler.domain">${__P(host,127.0.0.1)}</stringProp>
+          <stringProp name="HTTPSampler.port">${__P(port,18101)}</stringProp>
+          <stringProp name="HTTPSampler.protocol">${__P(protocol,http)}</stringProp>
+          <stringProp name="HTTPSampler.path">/api/user/login</stringProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <stringProp name="HTTPSampler.connect_timeout">5000</stringProp>
+          <stringProp name="HTTPSampler.response_timeout">15000</stringProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{"userAccount":"${userAccount}","userPassword":"${userPassword}"}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="Check business login result" enabled="true">
+            <stringProp name="scriptLanguage">groovy</stringProp>
+            <stringProp name="cacheKey">true</stringProp>
+            <stringProp name="parameters" />
+            <stringProp name="filename" />
+            <stringProp name="script">vars.put('login_ok', 'false'); vars.put('outcome', 'login_failed')
+try {
+    def r = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString())
+    if (!prev.isSuccessful() || r.code != 0 || r.data == null) throw new Exception('Login failed')
+    vars.put('login_ok', 'true'); vars.put('outcome', 'submission_failed')
+} catch (Exception e) { prev.setSuccessful(false); prev.setResponseMessage('Business login failed') }</stringProp>
+          </JSR223PostProcessor>
+          <hashTree />
+        </hashTree>
+        <IfController guiclass="IfControllerPanel" testclass="IfController" testname="Only submit after successful login" enabled="true">
+          <stringProp name="IfController.condition">${login_ok}</stringProp>
+          <boolProp name="IfController.evaluateAll">false</boolProp>
+          <boolProp name="IfController.useExpression">true</boolProp>
+        </IfController>
+        <hashTree>
+          <TransactionController guiclass="TransactionControllerGui" testclass="TransactionController" testname="Judge journey" enabled="true">
+            <boolProp name="TransactionController.parent">true</boolProp>
+            <boolProp name="TransactionController.includeTimers">true</boolProp>
+          </TransactionController>
+          <hashTree>
+            <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Submit" enabled="true">
+              <stringProp name="HTTPSampler.domain">${__P(host,127.0.0.1)}</stringProp>
+              <stringProp name="HTTPSampler.port">${__P(port,18101)}</stringProp>
+              <stringProp name="HTTPSampler.protocol">${__P(protocol,http)}</stringProp>
+              <stringProp name="HTTPSampler.path">/api/question/question_submit/do</stringProp>
+              <stringProp name="HTTPSampler.method">POST</stringProp>
+              <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+              <boolProp name="HTTPSampler.follow_redirects">false</boolProp>
+              <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+              <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+              <stringProp name="HTTPSampler.connect_timeout">5000</stringProp>
+              <stringProp name="HTTPSampler.response_timeout">15000</stringProp>
+              <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+              <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+                <collectionProp name="Arguments.arguments">
+                  <elementProp name="" elementType="HTTPArgument">
+                    <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                    <stringProp name="Argument.value">${submission_body}</stringProp>
+                    <stringProp name="Argument.metadata">=</stringProp>
+                  </elementProp>
+                </collectionProp>
+              </elementProp>
+            </HTTPSamplerProxy>
+            <hashTree>
+              <JSR223PreProcessor guiclass="TestBeanGUI" testclass="JSR223PreProcessor" testname="Start end-to-end clock" enabled="true">
+                <stringProp name="scriptLanguage">groovy</stringProp>
+                <stringProp name="cacheKey">true</stringProp>
+                <stringProp name="parameters" />
+                <stringProp name="filename" />
+                <stringProp name="script">def source = new String(java.util.Base64.getDecoder().decode('I2luY2x1ZGUgPGFsZ29yaXRobT4KI2luY2x1ZGUgPGlvc3RyZWFtPgojaW5jbHVkZSA8dmVjdG9yPgoKaW50IG1haW4oKSB7CiAgICBzdGQ6Omlvczo6c3luY193aXRoX3N0ZGlvKGZhbHNlKTsKICAgIHN0ZDo6Y2luLnRpZShudWxscHRyKTsKICAgIGludCBuLCBjYXBhY2l0eTsKICAgIGlmICghKHN0ZDo6Y2luID4+IG4gPj4gY2FwYWNpdHkpKSByZXR1cm4gMTsKICAgIHN0ZDo6dmVjdG9yPGludD4gZHAoY2FwYWNpdHkgKyAxLCAwKTsKICAgIGZvciAoaW50IGkgPSAwOyBpIDwgbjsgKytpKSB7CiAgICAgICAgaW50IHdlaWdodCwgdmFsdWU7CiAgICAgICAgc3RkOjpjaW4gPj4gd2VpZ2h0ID4+IHZhbHVlOwogICAgICAgIGZvciAoaW50IGMgPSBjYXBhY2l0eTsgYyA+PSB3ZWlnaHQ7IC0tYykgewogICAgICAgICAgICBkcFtjXSA9IHN0ZDo6bWF4KGRwW2NdLCBkcFtjIC0gd2VpZ2h0XSArIHZhbHVlKTsKICAgICAgICB9CiAgICB9CiAgICBzdGQ6OmNvdXQgPDwgZHBbY2FwYWNpdHldIDw8ICdcbic7Cn0K'), 'UTF-8')
+vars.put('submission_body', groovy.json.JsonOutput.toJson(
+    [questionId: vars.get('questionId'), language: 'cpp', code: source]))
+
+vars.put('started_ns', System.nanoTime().toString())
+vars.put('started_at', java.time.Instant.now().toString())
+vars.put('poll', 'false')</stringProp>
+              </JSR223PreProcessor>
+              <hashTree />
+              <JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="Extract exact submission ID and check business result" enabled="true">
+                <stringProp name="scriptLanguage">groovy</stringProp>
+                <stringProp name="cacheKey">true</stringProp>
+                <stringProp name="parameters" />
+                <stringProp name="filename" />
+                <stringProp name="script">try {
+    def r = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString())
+    if (!prev.isSuccessful() || r.code != 0 || r.data == null || !(r.data.toString() ==~ /[1-9][0-9]*/)) {
+        vars.put('business_code', r.code == null ? 'missing' : r.code.toString())
+        throw new Exception('Submission rejected')
+    }
+    vars.put('submitId', r.data.toString())
+    vars.put('outcome', 'pending'); vars.put('poll', 'true')
+} catch (Exception e) {
+    vars.put('poll', 'false'); prev.setSuccessful(false)
+    prev.setResponseMessage('Business submission failed; no automatic retry')
+}</stringProp>
+              </JSR223PostProcessor>
+              <hashTree />
+            </hashTree>
+            <WhileController guiclass="WhileControllerGui" testclass="WhileController" testname="Poll until terminal state or observation deadline" enabled="true">
+              <stringProp name="WhileController.condition">${poll}</stringProp>
+            </WhileController>
+            <hashTree>
+              <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Query result" enabled="true">
+                <stringProp name="HTTPSampler.domain">${__P(host,127.0.0.1)}</stringProp>
+                <stringProp name="HTTPSampler.port">${__P(port,18101)}</stringProp>
+                <stringProp name="HTTPSampler.protocol">${__P(protocol,http)}</stringProp>
+                <stringProp name="HTTPSampler.path">/api/question/question_submit/get/vo?id=${submitId}</stringProp>
+                <stringProp name="HTTPSampler.method">GET</stringProp>
+                <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+                <boolProp name="HTTPSampler.follow_redirects">false</boolProp>
+                <boolProp name="HTTPSampler.auto_redirects">false</boolProp>
+                <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+                <stringProp name="HTTPSampler.connect_timeout">5000</stringProp>
+                <stringProp name="HTTPSampler.response_timeout">15000</stringProp>
+                <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+                <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+                  <collectionProp name="Arguments.arguments" />
+                </elementProp>
+              </HTTPSamplerProxy>
+              <hashTree>
+                <ConstantTimer guiclass="ConstantTimerGui" testclass="ConstantTimer" testname="One-second polling interval" enabled="true">
+                  <stringProp name="ConstantTimer.delay">${__P(poll_ms,1000)}</stringProp>
+                </ConstantTimer>
+                <hashTree />
+                <JSR223PostProcessor guiclass="TestBeanGUI" testclass="JSR223PostProcessor" testname="Read terminal state; status 2 alone is not Accepted" enabled="true">
+                  <stringProp name="scriptLanguage">groovy</stringProp>
+                  <stringProp name="cacheKey">true</stringProp>
+                  <stringProp name="parameters" />
+                  <stringProp name="filename" />
+                  <stringProp name="script">try {
+    def r = new groovy.json.JsonSlurper().parseText(prev.getResponseDataAsString())
+    if (!prev.isSuccessful() || r.code != 0 || r.data == null || r.data.id?.toString() != vars.get('submitId')) {
+        throw new Exception('Result query failed')
+    }
+    def d = r.data
+    if (!(d.status instanceof Number) || !(d.status.intValue() in [0,1,2,3,4])) throw new Exception('Invalid status')
+    vars.put('final_status', d.status.toString())
+    def info = d.judgeInfo
+    if (info instanceof String) info = new groovy.json.JsonSlurper().parseText(info)
+    String verdict = info?.message == null ? '' : info.message.toString()
+    vars.put('verdict', verdict)
+    if (d.status.intValue() in [2,3,4]) {
+        vars.put('poll', 'false')
+        vars.put('outcome', d.status.intValue() == 2 &amp;&amp; verdict == 'Accepted' ? 'accepted' : 'judge_failed')
+    }
+} catch (Exception e) {
+    vars.put('poll', 'false'); vars.put('outcome', 'query_failed')
+    prev.setSuccessful(false); prev.setResponseMessage('Business result query failed')
+}
+long elapsed = (System.nanoTime() - vars.get('started_ns').toLong()) / 1000000L
+if (vars.get('poll') == 'true' &amp;&amp; elapsed &gt;= props.getProperty('timeout_seconds', '360').toLong() * 1000L) {
+    vars.put('poll', 'false'); vars.put('outcome', 'observation_timeout')
+}</stringProp>
+                </JSR223PostProcessor>
+                <hashTree />
+              </hashTree>
+            </hashTree>
+            <JSR223Sampler guiclass="TestBeanGUI" testclass="JSR223Sampler" testname="Check Accepted verdict" enabled="true">
+              <stringProp name="scriptLanguage">groovy</stringProp>
+              <stringProp name="cacheKey">true</stringProp>
+              <stringProp name="parameters" />
+              <stringProp name="filename" />
+              <stringProp name="script">boolean accepted = vars.get('outcome') == 'accepted'
+SampleResult.setSuccessful(accepted)
+SampleResult.setResponseCode(accepted ? '200' : '500')
+SampleResult.setResponseMessage(vars.get('outcome') ?: 'unknown')</stringProp>
+            </JSR223Sampler>
+            <hashTree />
+          </hashTree>
+        </hashTree>
+        <JSR223Sampler guiclass="TestBeanGUI" testclass="JSR223Sampler" testname="Save user outcome" enabled="true">
+          <stringProp name="scriptLanguage">groovy</stringProp>
+          <stringProp name="cacheKey">true</stringProp>
+          <stringProp name="parameters" />
+          <stringProp name="filename" />
+          <stringProp name="script">Long elapsed = vars.get('started_ns') == null ? null : (System.nanoTime() - vars.get('started_ns').toLong()).intdiv(1000000L)
+def result = [user: vars.get('userAccount'), submissionId: vars.get('submitId'),
+    startedAt: vars.get('started_at'), observedAt: java.time.Instant.now().toString(),
+    elapsedMs: elapsed, status: vars.get('final_status'), verdict: vars.get('verdict'),
+    outcome: vars.get('outcome'), businessCode: vars.get('business_code')]
+def dir = new File(props.getProperty('result_dir', props.getProperty('user.dir') + '/oj-manual-results'))
+dir.mkdirs()
+new File(dir, 'task-' + ctx.getThreadNum() + '.json').setText(groovy.json.JsonOutput.toJson(result), 'UTF-8')
+boolean accepted = result.outcome == 'accepted'
+SampleResult.setSuccessful(accepted)
+SampleResult.setResponseCode(accepted ? '200' : '500')
+SampleResult.setResponseMessage(result.outcome ?: 'unknown')
+SampleResult.setResponseData(groovy.json.JsonOutput.toJson(result), 'UTF-8')</stringProp>
+        </JSR223Sampler>
+        <hashTree />
+      </hashTree>
+    </hashTree>
+  </hashTree>
+</jmeterTestPlan>

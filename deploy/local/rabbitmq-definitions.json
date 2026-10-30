@@ -1,0 +1,72 @@
+{
+  "vhosts": [
+    {
+      "name": "/"
+    }
+  ],
+  "exchanges": [
+    {
+      "name": "code_exchange",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    },
+    {
+      "name": "code_dlx_exchange",
+      "vhost": "/",
+      "type": "direct",
+      "durable": true,
+      "auto_delete": false,
+      "internal": false,
+      "arguments": {}
+    }
+  ],
+  "queues": [
+    {
+      "name": "code_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    },
+    {
+      "name": "code_delay_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-message-ttl": 300000,
+        "x-dead-letter-exchange": "code_dlx_exchange",
+        "x-dead-letter-routing-key": "code_timeout"
+      }
+    },
+    {
+      "name": "code_timeout_queue",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {}
+    }
+  ],
+  "bindings": [
+    {
+      "source": "code_exchange",
+      "vhost": "/",
+      "destination": "code_queue",
+      "destination_type": "queue",
+      "routing_key": "my_routingKey",
+      "arguments": {}
+    },
+    {
+      "source": "code_dlx_exchange",
+      "vhost": "/",
+      "destination": "code_timeout_queue",
+      "destination_type": "queue",
+      "routing_key": "code_timeout",
+      "arguments": {}
+    }
+  ]
+}

@@ -1,0 +1,178 @@
+name: yuoj-services
+
+x-backend-environment: &backend-environment
+  SPRING_PROFILES_ACTIVE: docker
+  SPRING_CONFIG_ADDITIONAL_LOCATION: optional:file:/config/
+  MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Missing MYSQL_PASSWORD}
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?Missing REDIS_PASSWORD}
+  RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?Missing RABBITMQ_PASSWORD}
+  NACOS_ADMIN_PASSWORD: ${NACOS_ADMIN_PASSWORD:?Missing NACOS_ADMIN_PASSWORD}
+  SANDBOX_AUTH_SECRET: ${SANDBOX_AUTH_SECRET:?Run Start-Services.ps1 first}
+  JAVA_TOOL_OPTIONS: "-Xms64m -Xmx256m -XX:ActiveProcessorCount=2 -Dfile.encoding=UTF-8 -Duser.home=/tmp -Dcsp.sentinel.log.dir=/tmp/sentinel"
+
+x-backend: &backend
+  environment: *backend-environment
+  volumes:
+    - ./deploy/local/config/backend:/config:ro
+  restart: unless-stopped
+
+services:
+  frontend:
+    profiles: ["website"]
+    image: yuoj-frontend:local
+    build: ./yuoj-frontend
+    depends_on:
+      yuoj-backend-gateway:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${WEBSITE_PORT:-18081}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/healthz | grep -qx ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+  yuoj-backend-user-service:
+    <<: *backend
+    image: yuoj-user-service:local
+    build: ./yuoj-backend-microservice/yuoj-backend-user-service
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:8102/api/user/get/login >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 45s
+
+  yuoj-backend-question-service:
+    <<: *backend
+    environment:
+      <<: *backend-environment
+      JUDGE_CASE_MAX_BYTES: ${JUDGE_CASE_MAX_BYTES:-1048576}
+      JUDGE_DIAGNOSTICS_ENABLED: ${JUDGE_DIAGNOSTICS_ENABLED:-false}
+    image: yuoj-question-service:local
+    build: ./yuoj-backend-microservice/yuoj-backend-question-service
+    depends_on:
+      yuoj-backend-user-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent -X POST -H 'Content-Type: application/json' -d '{\"current\":1,\"pageSize\":1}' http://127.0.0.1:8103/api/question/list/page/vo >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 45s
+
+  code-sandbox: &sandbox
+    image: yuoj-code-sandbox:local
+    build: ./yuoj-code-sandbox
+    environment: &sandbox-environment
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_CONFIG_ADDITIONAL_LOCATION: optional:file:/config/
+      SANDBOX_AUTH_SECRET: ${SANDBOX_AUTH_SECRET:?Missing SANDBOX_AUTH_SECRET}
+      NACOS_ADMIN_PASSWORD: ${NACOS_ADMIN_PASSWORD:?Missing NACOS_ADMIN_PASSWORD}
+      SANDBOX_INSTANCE_ID: sandbox-1
+      SANDBOX_MAX_CONCURRENT: ${SANDBOX_MAX_CONCURRENT:-6}
+      SANDBOX_HOST_WORKSPACE_ROOT: ${SANDBOX_HOST_WORKSPACE_ROOT:?Run Start-Services.ps1 first}
+      DOCKER_HOST: unix:///var/run/docker.sock
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx256m -XX:ActiveProcessorCount=2 -Dfile.encoding=UTF-8 -Dapi.version=1.41"
+    volumes:
+      - ./deploy/local/config/sandbox:/config:ro
+      - sandbox-work:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "127.0.0.1:${SANDBOX_PORT:-18090}:8090"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:8090/health | grep -qx ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    restart: unless-stopped
+
+  code-sandbox-2:
+    <<: *sandbox
+    profiles: ["sandbox-scale"]
+    environment:
+      <<: *sandbox-environment
+      SANDBOX_INSTANCE_ID: sandbox-2
+      SANDBOX_HOST_WORKSPACE_ROOT: ${SANDBOX2_HOST_WORKSPACE_ROOT:-/var/lib/docker/volumes/yuoj-local-sandbox-work-2/_data}
+    volumes:
+      - ./deploy/local/config/sandbox:/config:ro
+      - sandbox-work-2:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Both instances listen on 8090 inside their own container; no second host port.
+    ports: []
+
+  code-sandbox-3:
+    <<: *sandbox
+    profiles: ["sandbox-scale-3"]
+    environment:
+      <<: *sandbox-environment
+      SANDBOX_INSTANCE_ID: sandbox-3
+      SANDBOX_HOST_WORKSPACE_ROOT: ${SANDBOX3_HOST_WORKSPACE_ROOT:-/var/lib/docker/volumes/yuoj-local-sandbox-work-3/_data}
+    volumes:
+      - ./deploy/local/config/sandbox:/config:ro
+      - sandbox-work-3:/workspace
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports: []
+
+  yuoj-backend-judge-service:
+    <<: *backend
+    image: yuoj-judge-service:local
+    build: ./yuoj-backend-microservice/yuoj-backend-judge-service
+    environment:
+      <<: *backend-environment
+      SPRING_RABBITMQ_LISTENER_SIMPLE_CONCURRENCY: "${JUDGE_CONSUMERS:-12}"
+      SPRING_RABBITMQ_LISTENER_SIMPLE_MAX_CONCURRENCY: "${JUDGE_CONSUMERS:-12}"
+      SPRING_RABBITMQ_LISTENER_SIMPLE_PREFETCH: "1"
+      SANDBOX_CLIENT_TYPE: ${SANDBOX_CLIENT_TYPE:-discovery}
+      SPRING_CLOUD_LOADBALANCER_RETRY_ENABLED: "false"
+      SPRING_CLOUD_LOADBALANCER_CACHE_ENABLED: "false"
+    depends_on:
+      yuoj-backend-question-service:
+        condition: service_healthy
+      code-sandbox:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-ec", "echo >/dev/tcp/127.0.0.1/8104"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 45s
+
+  yuoj-backend-gateway:
+    <<: *backend
+    image: yuoj-gateway:local
+    build: ./yuoj-backend-microservice/yuoj-backend-gateway
+    depends_on:
+      yuoj-backend-user-service:
+        condition: service_healthy
+      yuoj-backend-question-service:
+        condition: service_healthy
+      yuoj-backend-judge-service:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${GATEWAY_PORT:-18101}:8101"
+    healthcheck:
+      test: ["CMD-SHELL", "curl --fail --silent http://127.0.0.1:8101/api/user/get/login >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+networks:
+  default:
+    external: true
+    name: yuoj-local-network
+
+volumes:
+  sandbox-work:
+    external: true
+    name: yuoj-local-sandbox-work
+  sandbox-work-2:
+    external: true
+    name: yuoj-local-sandbox-work-2
+  sandbox-work-3:
+    external: true
+    name: yuoj-local-sandbox-work-3

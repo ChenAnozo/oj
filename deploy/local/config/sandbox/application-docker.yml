@@ -1,0 +1,19 @@
+codesandbox:
+  instance-id: ${SANDBOX_INSTANCE_ID:sandbox-1}
+  max-concurrent-executions: ${SANDBOX_MAX_CONCURRENT:6}
+  queue-wait-ms: 10000
+  auth-secret: ${SANDBOX_AUTH_SECRET}
+  workspace-root: /workspace
+  host-workspace-root: ${SANDBOX_HOST_WORKSPACE_ROOT}
+  java-image: eclipse-temurin:8-jre-jammy@sha256:49b31e882495abeb1118de417ee696bdc929d2de238730920f1468025fc393a4
+  cpp-image: alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
+spring:
+  cloud:
+    nacos:
+      discovery:
+        enabled: true
+        server-addr: nacos:8848
+        username: nacos
+        password: ${NACOS_ADMIN_PASSWORD}
+        metadata:
+          sandbox-instance: ${SANDBOX_INSTANCE_ID:sandbox-1}

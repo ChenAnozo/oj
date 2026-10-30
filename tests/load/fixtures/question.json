@@ -1,0 +1,12 @@
+{
+  "title": "OJ load test - sum",
+  "content": "Read two integers a and b, and print a + b. Dedicated load-test fixture.",
+  "tags": ["load-test"],
+  "answer": "Print the sum of two signed 64-bit integers.",
+  "judgeCase": [
+    {"input": "1 2", "output": "3"},
+    {"input": "-5 8", "output": "3"},
+    {"input": "1000000000 2000000000", "output": "3000000000"}
+  ],
+  "judgeConfig": {"timeLimit": 10000, "memoryLimit": 131072, "stackLimit": 10000}
+}

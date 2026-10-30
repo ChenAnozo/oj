@@ -1,0 +1,39 @@
+# Local credentials and private configuration
+.env
+.env.*
+!.env.example
+!**/.env.example
+!yuoj-frontend/.env.container
+!yuoj-frontend/.env.docker
+*.pem
+*.key
+*.pfx
+*.p12
+*.jks
+*.keystore
+
+# Generated files and local data
+**/target/
+**/node_modules/
+**/dist/
+**/tmpCode/
+**/.local/
+**/.tools/
+**/__pycache__/
+/tests/load/results/
+*.log
+*.class
+*.exe
+*.zip
+*.sql.gz
+*.dump
+*.db
+*.sqlite*
+/deploy/local/*-acceptance.png
+
+# Editor and operating system files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db

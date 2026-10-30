@@ -1,0 +1,7 @@
+# Only send the packaged application and build definitions.
+**
+!Dockerfile
+!.dockerignore
+!target/
+target/**
+!target/yuoj-code-sandbox-0.0.1-SNAPSHOT.jar

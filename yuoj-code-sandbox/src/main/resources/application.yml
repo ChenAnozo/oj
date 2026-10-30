@@ -1,0 +1,13 @@
+server:
+  port: 8090
+spring:
+  application:
+    name: yuoj-code-sandbox
+  cloud:
+    nacos:
+      discovery:
+        # Standalone execution still works without a registry.
+        enabled: false
+
+codesandbox:
+  auth-secret: ${SANDBOX_AUTH_SECRET}

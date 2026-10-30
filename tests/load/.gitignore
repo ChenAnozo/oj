@@ -1,0 +1,4 @@
+.local/
+.tools/
+results/
+__pycache__/
