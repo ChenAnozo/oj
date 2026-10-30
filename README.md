@@ -14,9 +14,15 @@
 
 ## 本地启动
 
-需要 PowerShell、Docker Desktop（Linux 容器引擎）、Node.js/npm。推荐使用容器部署，Java 服务在镜像内构建。以下命令在项目根目录执行：
+需要 PowerShell、Docker Desktop（Linux 容器引擎）、JDK 8 或兼容的 JDK、Maven、Node.js/npm，以及下载 Maven/npm 依赖和容器镜像的网络权限。推荐使用容器部署；Java 服务需要先在本机打包成 JAR，Dockerfile 再复制打包产物。以下命令在项目根目录执行，每一步成功后再执行下一步：
 
 ```powershell
+Push-Location .\yuoj-backend-microservice
+mvn.cmd package -DskipTests
+Pop-Location
+Push-Location .\yuoj-code-sandbox
+mvn.cmd package -DskipTests
+Pop-Location
 Push-Location .\yuoj-frontend
 npm.cmd ci
 Pop-Location
@@ -25,6 +31,10 @@ Pop-Location
 ```
 
 访问 <http://127.0.0.1:18081>。首次运行脚本生成 `deploy/local/.env`，使用随机凭据；该文件不会提交到 Git。不要把 `.env.example` 的占位符直接当成密码使用。部署使用固定的 `yuoj-local` Compose 项目名，不要在已有实例运行时启动另一份副本。
+
+在另一台机器、没有复用旧数据卷的情况下，数据库只初始化表结构，不含原开发者的用户、题目或提交记录。需要自行注册账号及准备题目数据。克隆仓库不会获取原开发者电脑上的数据库或 Docker 数据卷。
+
+Codex 可以协助执行上述步骤，但运行环境必须允许安装依赖、启动 Docker 容器，并让沙箱服务访问 Docker 引擎。受限的云执行环境不一定满足完整部署条件；当前启动脚本面向 Windows PowerShell。上传 GitHub 本身不会自动托管这个网站。
 
 详细说明见 [环境依赖](deploy/local/README.md)、[业务服务](deploy/local/SERVICES.md)、[网站部署](deploy/local/WEBSITE.md) 和 [沙箱扩展](deploy/local/SANDBOX-DISCOVERY.md)。这些文档中保留的验收结果属于原开发环境记录，本发布副本的检查见 [发布说明](PUBLICATION.md)。
 
